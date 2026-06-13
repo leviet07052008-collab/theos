@@ -2,72 +2,95 @@
 #import <substrate.h>
 
 static UIWindow *menuWindow;
-static BOOL espEnabled = NO, aimlockEnabled = NO, noRecoilEnabled = NO, wallhackEnabled = NO;
+static BOOL espEnabled = NO;
+static BOOL aimlockEnabled = NO;
+static BOOL noRecoilEnabled = NO;
+static BOOL wallhackEnabled = NO;
+
+static void toggleESP() { espEnabled = !espEnabled; }
+static void toggleAimlock() { aimlockEnabled = !aimlockEnabled; }
+static void toggleNoRecoil() { noRecoilEnabled = !noRecoilEnabled; }
+static void toggleWallhack() { wallhackEnabled = !wallhackEnabled; }
+static void hideMenu() { menuWindow.hidden = YES; }
+
+static void buttonTapped(UIButton *sender) {
+    switch(sender.tag) {
+        case 0: toggleESP(); break;
+        case 1: toggleAimlock(); break;
+        case 2: toggleNoRecoil(); break;
+        case 3: toggleWallhack(); break;
+        case 4: hideMenu(); break;
+    }
+    NSString *status = (sender.tag < 4) ? (((sender.tag==0&&espEnabled)||(sender.tag==1&&aimlockEnabled)||(sender.tag==2&&noRecoilEnabled)||(sender.tag==3&&wallhackEnabled)) ? @"ON" : @"OFF") : @"";
+    if(sender.tag < 4) {
+        NSString *title = [sender.titleLabel.text componentsSeparatedByString:@" ("][0];
+        [sender setTitle:[title stringByAppendingFormat:@" (%@)", status] forState:UIControlStateNormal];
+        sender.backgroundColor = [status isEqualToString:@"ON"] ? [UIColor greenColor] : [UIColor darkGrayColor];
+    }
+}
 
 static void showMenu() {
-    menuWindow = [[UIWindow alloc] initWithFrame:CGRectMake(0, 80, [UIScreen mainScreen].bounds.size.width, 220)];
-    menuWindow.backgroundColor = [UIColor colorWithWhite:0 alpha:0.9];
+    menuWindow = [[UIWindow alloc] initWithFrame:CGRectMake(0, 80, [UIScreen mainScreen].bounds.size.width, 230)];
+    menuWindow.backgroundColor = [UIColor colorWithWhite:0 alpha:0.85];
     menuWindow.windowLevel = UIWindowLevelAlert + 2;
+    menuWindow.layer.cornerRadius = 12;
     
-    NSArray *titles = @[@"ESP", @"Aimlock", @"No Recoil", @"Wallhack"];
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 10, menuWindow.frame.size.width, 30)];
+    title.text = @"FF Menu v1.0";
+    title.textColor = [UIColor redColor];
+    title.textAlignment = NSTextAlignmentCenter;
+    [menuWindow addSubview:title];
+    
+    NSArray *names = @[@"ESP", @"Aimlock", @"No Recoil", @"Wallhack"];
     for (int i = 0; i < 4; i++) {
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-        btn.frame = CGRectMake(20 + (i%2)*150, 30 + (i/2)*60, 130, 45);
-        [btn setTitle:[titles[i] stringByAppendingString:@" (Tắt)"] forState:UIControlStateNormal];
+        btn.frame = CGRectMake(20 + (i%2)*150, 50 + (i/2)*55, 130, 40);
+        [btn setTitle:[names[i] stringByAppendingString:@" (OFF)"] forState:UIControlStateNormal];
         btn.backgroundColor = [UIColor darkGrayColor];
         btn.layer.cornerRadius = 8;
-        btn.tag = i + 1;
-        [btn addTarget:self action:@selector(toggleCheat:) forControlEvents:UIControlEventTouchUpInside];
+        btn.tag = i;
+        [btn addTarget:nil action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
         [menuWindow addSubview:btn];
     }
     
     UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    closeBtn.frame = CGRectMake(20, 160, 280, 40);
+    closeBtn.frame = CGRectMake(20, 170, 280, 40);
     [closeBtn setTitle:@"Ẩn Menu" forState:UIControlStateNormal];
     closeBtn.backgroundColor = [UIColor redColor];
-    [closeBtn addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
+    closeBtn.tag = 4;
+    [closeBtn addTarget:nil action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
     [menuWindow addSubview:closeBtn];
     
     menuWindow.hidden = NO;
 }
 
-static void toggleCheat(UIButton *sender) {
-    switch(sender.tag) {
-        case 1: espEnabled = !espEnabled; break;
-        case 2: aimlockEnabled = !aimlockEnabled; break;
-        case 3: noRecoilEnabled = !noRecoilEnabled; break;
-        case 4: wallhackEnabled = !wallhackEnabled; break;
-    }
-    NSString *newTitle = [sender.titleLabel.text componentsSeparatedByString:@" ("][0];
-    newTitle = [newTitle stringByAppendingString: (espEnabled||aimlockEnabled||noRecoilEnabled||wallhackEnabled) ? @" (Bật)" : @" (Tắt)"];
-    [sender setTitle:newTitle forState:UIControlStateNormal];
-    sender.backgroundColor = (espEnabled||aimlockEnabled||noRecoilEnabled||wallhackEnabled) ? [UIColor greenColor] : [UIColor darkGrayColor];
-}
-
-static void closeMenu() { menuWindow.hidden = YES; }
-
 // Hook antiban
 %hook GGAntiCheatManager
 - (BOOL)isGameTampered { return NO; }
 - (BOOL)isMemoryModified { return NO; }
-- (void)sendViolationReport:(id)report { }
+- (void)reportViolation:(id)violation { }
 %end
 
 %hook GGAntiMod
 - (BOOL)checkInjectedDylibs { return NO; }
-- (BOOL)isDebuggerAttached { return NO; }
 %end
 
 // Hook cheat
 %hook PlayerWeapon
-- (float)getRecoilMultiplier { return noRecoilEnabled ? 0 : %orig; }
+- (float)recoilMultiplier { return noRecoilEnabled ? 0.0 : %orig; }
 %end
 
 %hook EnemyPawn
-- (BOOL)isVisible { return espEnabled ? YES : %orig; }
+- (BOOL)isVisibleToPlayer { return espEnabled ? YES : %orig; }
+%end
+
+%hook WallActor
+- (BOOL)isOccluding { return wallhackEnabled ? NO : %orig; }
 %end
 
 %ctor {
-    dispatch_async(dispatch_get_main_queue(), ^{ showMenu(); });
+    dispatch_async(dispatch_get_main_queue(), ^{
+        showMenu();
+    });
     NSLog(@"[FFMenu] Loaded");
 }
