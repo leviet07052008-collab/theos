@@ -7,6 +7,7 @@ static BOOL aimlockEnabled = NO;
 static BOOL noRecoilEnabled = NO;
 static BOOL wallhackEnabled = NO;
 
+// ==================== MENU UI ====================
 static void toggleESP() { espEnabled = !espEnabled; }
 static void toggleAimlock() { aimlockEnabled = !aimlockEnabled; }
 static void toggleNoRecoil() { noRecoilEnabled = !noRecoilEnabled; }
@@ -21,11 +22,14 @@ static void buttonTapped(UIButton *sender) {
         case 3: toggleWallhack(); break;
         case 4: hideMenu(); break;
     }
-    NSString *status = (sender.tag < 4) ? (((sender.tag==0&&espEnabled)||(sender.tag==1&&aimlockEnabled)||(sender.tag==2&&noRecoilEnabled)||(sender.tag==3&&wallhackEnabled)) ? @"ON" : @"OFF") : @"";
     if(sender.tag < 4) {
+        BOOL isOn = (sender.tag==0 && espEnabled) ||
+                    (sender.tag==1 && aimlockEnabled) ||
+                    (sender.tag==2 && noRecoilEnabled) ||
+                    (sender.tag==3 && wallhackEnabled);
         NSString *title = [sender.titleLabel.text componentsSeparatedByString:@" ("][0];
-        [sender setTitle:[title stringByAppendingFormat:@" (%@)", status] forState:UIControlStateNormal];
-        sender.backgroundColor = [status isEqualToString:@"ON"] ? [UIColor greenColor] : [UIColor darkGrayColor];
+        [sender setTitle:[title stringByAppendingFormat:@" (%@)", isOn ? @"ON" : @"OFF"] forState:UIControlStateNormal];
+        sender.backgroundColor = isOn ? [UIColor greenColor] : [UIColor darkGrayColor];
     }
 }
 
@@ -64,33 +68,111 @@ static void showMenu() {
     menuWindow.hidden = NO;
 }
 
-// Hook antiban
+// ==================== ANTIBAN NÂNG CAO ====================
+
+// Chặn toàn bộ báo cáo vi phạm
 %hook GGAntiCheatManager
 - (BOOL)isGameTampered { return NO; }
 - (BOOL)isMemoryModified { return NO; }
 - (void)reportViolation:(id)violation { }
+- (void)sendCheatData:(id)data { }
 %end
 
 %hook GGAntiMod
 - (BOOL)checkInjectedDylibs { return NO; }
+- (BOOL)verifyCodeSignature { return YES; }
+- (BOOL)isDebuggerAttached { return NO; }
 %end
 
-// Hook cheat
+%hook FFMemoryScanner
+- (void)startScan { }
+- (id)getScanResult { return nil; }
+- (void)scanForModules { }
+- (id)getLoadedLibraries {
+    NSArray *libs = %orig;
+    NSMutableArray *filtered = [NSMutableArray array];
+    for(NSString *lib in libs) {
+        if(![lib containsString:@"FFMenu"] && ![lib containsString:@"dylib"]) {
+            [filtered addObject:lib];
+        }
+    }
+    return filtered;
+}
+%end
+
+%hook FFNetworkManager
+- (void)sendData:(id)data {
+    NSString *str = [data description];
+    if([str containsString:@"cheat"] || [str containsString:@"violation"] || 
+       [str containsString:@"mod"] || [str containsString:@"hack"] || 
+       [str containsString:@"inject"]) {
+        return;
+    }
+    %orig;
+}
+- (void)sendReport:(id)report {
+    return;
+}
+%end
+
+%hook FFDeviceInfo
+- (id)getDeviceID { return @"original_fake_id"; }
+- (id)getPhoneNumber { return nil; }
+- (BOOL)isJailbroken { return NO; }
+- (id)getBundleID { return @"com.dts.freefireth"; }
+%end
+
+%hook FFSignatureValidator
+- (BOOL)validateSignature { return YES; }
+- (BOOL)checkBundleIdentifier { return YES; }
+%end
+
+%hook MSCheck
+- (BOOL)isSubstratePresent { return NO; }
+%end
+
+// ==================== CHEAT ====================
 %hook PlayerWeapon
-- (float)recoilMultiplier { return noRecoilEnabled ? 0.0 : %orig; }
+- (float)recoilMultiplier {
+    return noRecoilEnabled ? 0.0 : %orig;
+}
+- (float)getSpread {
+    return noRecoilEnabled ? 0.0 : %orig;
+}
 %end
 
 %hook EnemyPawn
-- (BOOL)isVisibleToPlayer { return espEnabled ? YES : %orig; }
+- (BOOL)isVisibleToPlayer {
+    return espEnabled ? YES : %orig;
+}
+- (CGPoint)getHeadPosition {
+    if(aimlockEnabled) {
+        CGPoint head = %orig;
+        head.x += 1.0; // aimlock giả lập
+        return head;
+    }
+    return %orig;
+}
+- (id)getBonePosition:(int)bone {
+    if(aimlockEnabled && bone == 0) {
+        return %orig;
+    }
+    return %orig;
+}
 %end
 
 %hook WallActor
-- (BOOL)isOccluding { return wallhackEnabled ? NO : %orig; }
+- (BOOL)isOccluding {
+    return wallhackEnabled ? NO : %orig;
+}
+- (BOOL)canBlockBullet {
+    return wallhackEnabled ? NO : %orig;
+}
 %end
 
+// ==================== KHỞI TẠO ====================
 %ctor {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         showMenu();
     });
-    NSLog(@"[FFMenu] Loaded");
 }
