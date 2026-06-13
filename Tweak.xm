@@ -7,20 +7,29 @@ static BOOL aimlockEnabled = NO;
 static BOOL noRecoilEnabled = NO;
 static BOOL wallhackEnabled = NO;
 
-// ==================== MENU UI ====================
-static void toggleESP() { espEnabled = !espEnabled; }
-static void toggleAimlock() { aimlockEnabled = !aimlockEnabled; }
-static void toggleNoRecoil() { noRecoilEnabled = !noRecoilEnabled; }
-static void toggleWallhack() { wallhackEnabled = !wallhackEnabled; }
-static void hideMenu() { menuWindow.hidden = YES; }
+@interface MenuHandler : NSObject
++ (void)toggleESP;
++ (void)toggleAimlock;
++ (void)toggleNoRecoil;
++ (void)toggleWallhack;
++ (void)hideMenu;
++ (void)buttonTapped:(UIButton *)sender;
+@end
 
-static void buttonTapped(UIButton *sender) {
+@implementation MenuHandler
++ (void)toggleESP { espEnabled = !espEnabled; }
++ (void)toggleAimlock { aimlockEnabled = !aimlockEnabled; }
++ (void)toggleNoRecoil { noRecoilEnabled = !noRecoilEnabled; }
++ (void)toggleWallhack { wallhackEnabled = !wallhackEnabled; }
++ (void)hideMenu { menuWindow.hidden = YES; }
+
++ (void)buttonTapped:(UIButton *)sender {
     switch(sender.tag) {
-        case 0: toggleESP(); break;
-        case 1: toggleAimlock(); break;
-        case 2: toggleNoRecoil(); break;
-        case 3: toggleWallhack(); break;
-        case 4: hideMenu(); break;
+        case 0: [self toggleESP]; break;
+        case 1: [self toggleAimlock]; break;
+        case 2: [self toggleNoRecoil]; break;
+        case 3: [self toggleWallhack]; break;
+        case 4: [self hideMenu]; break;
     }
     if(sender.tag < 4) {
         BOOL isOn = (sender.tag==0 && espEnabled) ||
@@ -32,6 +41,7 @@ static void buttonTapped(UIButton *sender) {
         sender.backgroundColor = isOn ? [UIColor greenColor] : [UIColor darkGrayColor];
     }
 }
+@end
 
 static void showMenu() {
     menuWindow = [[UIWindow alloc] initWithFrame:CGRectMake(0, 80, [UIScreen mainScreen].bounds.size.width, 230)];
@@ -53,7 +63,7 @@ static void showMenu() {
         btn.backgroundColor = [UIColor darkGrayColor];
         btn.layer.cornerRadius = 8;
         btn.tag = i;
-        [btn addTarget:nil action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [btn addTarget:[MenuHandler class] action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
         [menuWindow addSubview:btn];
     }
     
@@ -62,37 +72,31 @@ static void showMenu() {
     [closeBtn setTitle:@"Ẩn Menu" forState:UIControlStateNormal];
     closeBtn.backgroundColor = [UIColor redColor];
     closeBtn.tag = 4;
-    [closeBtn addTarget:nil action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
+    [closeBtn addTarget:[MenuHandler class] action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
     [menuWindow addSubview:closeBtn];
     
     menuWindow.hidden = NO;
 }
 
-// ==================== ANTIBAN NÂNG CAO ====================
-
-// Chặn toàn bộ báo cáo vi phạm
+// ==================== ANTIBAN ====================
 %hook GGAntiCheatManager
 - (BOOL)isGameTampered { return NO; }
 - (BOOL)isMemoryModified { return NO; }
 - (void)reportViolation:(id)violation { }
-- (void)sendCheatData:(id)data { }
 %end
 
 %hook GGAntiMod
 - (BOOL)checkInjectedDylibs { return NO; }
 - (BOOL)verifyCodeSignature { return YES; }
-- (BOOL)isDebuggerAttached { return NO; }
 %end
 
 %hook FFMemoryScanner
 - (void)startScan { }
-- (id)getScanResult { return nil; }
-- (void)scanForModules { }
 - (id)getLoadedLibraries {
     NSArray *libs = %orig;
     NSMutableArray *filtered = [NSMutableArray array];
     for(NSString *lib in libs) {
-        if(![lib containsString:@"FFMenu"] && ![lib containsString:@"dylib"]) {
+        if(![lib containsString:@"FFMenu"]) {
             [filtered addObject:lib];
         }
     }
@@ -100,74 +104,17 @@ static void showMenu() {
 }
 %end
 
-%hook FFNetworkManager
-- (void)sendData:(id)data {
-    NSString *str = [data description];
-    if([str containsString:@"cheat"] || [str containsString:@"violation"] || 
-       [str containsString:@"mod"] || [str containsString:@"hack"] || 
-       [str containsString:@"inject"]) {
-        return;
-    }
-    %orig;
-}
-- (void)sendReport:(id)report {
-    return;
-}
-%end
-
-%hook FFDeviceInfo
-- (id)getDeviceID { return @"original_fake_id"; }
-- (id)getPhoneNumber { return nil; }
-- (BOOL)isJailbroken { return NO; }
-- (id)getBundleID { return @"com.dts.freefireth"; }
-%end
-
-%hook FFSignatureValidator
-- (BOOL)validateSignature { return YES; }
-- (BOOL)checkBundleIdentifier { return YES; }
-%end
-
-%hook MSCheck
-- (BOOL)isSubstratePresent { return NO; }
-%end
-
 // ==================== CHEAT ====================
 %hook PlayerWeapon
-- (float)recoilMultiplier {
-    return noRecoilEnabled ? 0.0 : %orig;
-}
-- (float)getSpread {
-    return noRecoilEnabled ? 0.0 : %orig;
-}
+- (float)recoilMultiplier { return noRecoilEnabled ? 0.0 : %orig; }
 %end
 
 %hook EnemyPawn
-- (BOOL)isVisibleToPlayer {
-    return espEnabled ? YES : %orig;
-}
-- (CGPoint)getHeadPosition {
-    if(aimlockEnabled) {
-        CGPoint head = %orig;
-        head.x += 1.0; // aimlock giả lập
-        return head;
-    }
-    return %orig;
-}
-- (id)getBonePosition:(int)bone {
-    if(aimlockEnabled && bone == 0) {
-        return %orig;
-    }
-    return %orig;
-}
+- (BOOL)isVisibleToPlayer { return espEnabled ? YES : %orig; }
 %end
 
 %hook WallActor
-- (BOOL)isOccluding {
-    return wallhackEnabled ? NO : %orig;
-}
-- (BOOL)canBlockBullet {
-    return wallhackEnabled ? NO : %orig;
-}
+- (BOOL)isOccluding { return wallhackEnabled ? NO : %orig; }
 %end
 
 // ==================== KHỞI TẠO ====================
