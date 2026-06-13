@@ -14,7 +14,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME=FFMenu
 
 FFMenu_FILES=Tweak.xm
-FFMenu_CFLAGS=-fobjc-arc
+FFMenu_CFLAGS=-fobjc-arc -Wno-unused-function
 FFMenu_FRAMEWORKS=UIKit Foundation
 
 include $(THEOS)/makefiles/tweak.mk
