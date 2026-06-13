@@ -2,8 +2,7 @@ Package: com.froghack.freefire
 Name: FrogHack
 Version: 1.0.0
 Architecture: iphoneos-arm
-Description: Free Fire Aimbot Wallhack ESP AntiBan
+Description: Free Fire Hack
 Maintainer: FrogHack
 Author: FrogHack
 Section: Tweaks
-Depends: mobilesubstrate
