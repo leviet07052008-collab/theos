@@ -1,0 +1,11 @@
+Package: com.dts.ffmenu
+Name: FFMenu
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Hack menu cho FreeFire 1.123.1.8 gồm Headshot, No Recoil, No Spread, Aimbot, Speed Hack, Magic Bullet
+Maintainer: unknown
+Author: unknown
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader
+Conflicts: 
+Replaces:
