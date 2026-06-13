@@ -1,125 +1,217 @@
 #import <UIKit/UIKit.h>
-#import <substrate.h>
+#import <QuartzCore/QuartzCore.h>
 
-static UIWindow *menuWindow;
-static BOOL espEnabled = NO;
-static BOOL aimlockEnabled = NO;
-static BOOL noRecoilEnabled = NO;
-static BOOL wallhackEnabled = NO;
+static BOOL headshotEnabled = YES;
+static BOOL noRecoilEnabled = YES;
+static BOOL noSpreadEnabled = YES;
+static BOOL aimbotEnabled = YES;
+static BOOL speedHackEnabled = NO;
+static BOOL magicBulletEnabled = NO;
 
-@interface MenuHandler : NSObject
-+ (void)toggleESP;
-+ (void)toggleAimlock;
-+ (void)toggleNoRecoil;
-+ (void)toggleWallhack;
-+ (void)hideMenu;
-+ (void)buttonTapped:(UIButton *)sender;
+static UIView *menuView = nil;
+static UIWindow *overlayWindow = nil;
+
+// Menu chính
+@interface FFMenuView : UIView
+@property (nonatomic, strong) UIButton *toggleBtn;
+@property (nonatomic, strong) UIView *panel;
+@property (nonatomic, assign) BOOL isOpen;
 @end
 
-@implementation MenuHandler
-+ (void)toggleESP { espEnabled = !espEnabled; }
-+ (void)toggleAimlock { aimlockEnabled = !aimlockEnabled; }
-+ (void)toggleNoRecoil { noRecoilEnabled = !noRecoilEnabled; }
-+ (void)toggleWallhack { wallhackEnabled = !wallhackEnabled; }
-+ (void)hideMenu { menuWindow.hidden = YES; }
+@implementation FFMenuView
 
-+ (void)buttonTapped:(UIButton *)sender {
-    switch(sender.tag) {
-        case 0: [self toggleESP]; break;
-        case 1: [self toggleAimlock]; break;
-        case 2: [self toggleNoRecoil]; break;
-        case 3: [self toggleWallhack]; break;
-        case 4: [self hideMenu]; break;
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.isOpen = NO;
+        [self setupUI];
     }
-    if(sender.tag < 4) {
-        BOOL isOn = (sender.tag==0 && espEnabled) ||
-                    (sender.tag==1 && aimlockEnabled) ||
-                    (sender.tag==2 && noRecoilEnabled) ||
-                    (sender.tag==3 && wallhackEnabled);
-        NSString *title = [sender.titleLabel.text componentsSeparatedByString:@" ("][0];
-        [sender setTitle:[title stringByAppendingFormat:@" (%@)", isOn ? @"ON" : @"OFF"] forState:UIControlStateNormal];
-        sender.backgroundColor = isOn ? [UIColor greenColor] : [UIColor darkGrayColor];
-    }
+    return self;
 }
-@end
 
-static void showMenu() {
-    menuWindow = [[UIWindow alloc] initWithFrame:CGRectMake(0, 80, [UIScreen mainScreen].bounds.size.width, 230)];
-    menuWindow.backgroundColor = [UIColor colorWithWhite:0 alpha:0.85];
-    menuWindow.windowLevel = UIWindowLevelAlert + 2;
-    menuWindow.layer.cornerRadius = 12;
+- (void)setupUI {
+    self.backgroundColor = [UIColor clearColor];
     
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 10, menuWindow.frame.size.width, 30)];
-    title.text = @"FF Menu v1.0";
-    title.textColor = [UIColor redColor];
+    // Nút toggle
+    self.toggleBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.toggleBtn.frame = CGRectMake(10, 60, 55, 55);
+    self.toggleBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.85];
+    self.toggleBtn.layer.cornerRadius = 27.5;
+    self.toggleBtn.layer.borderWidth = 1;
+    self.toggleBtn.layer.borderColor = [UIColor yellowColor].CGColor;
+    [self.toggleBtn setTitle:@"⚡" forState:UIControlStateNormal];
+    [self.toggleBtn setTitleColor:[UIColor yellowColor] forState:UIControlStateNormal];
+    self.toggleBtn.titleLabel.font = [UIFont boldSystemFontOfSize:28];
+    [self.toggleBtn addTarget:self action:@selector(toggleMenu) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:self.toggleBtn];
+    
+    // Panel menu
+    self.panel = [[UIView alloc] initWithFrame:CGRectMake(10, 125, 200, 320)];
+    self.panel.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.9]];
+    self.panel.layer.cornerRadius = 15;
+    self.panel.layer.borderWidth = 1;
+    self.panel.layer.borderColor = [UIColor grayColor].CGColor;
+    self.panel.hidden = YES;
+    [self addSubview:self.panel];
+    
+    // Title
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 10, 200, 30)];
+    title.text = @"FFMenu v1.123.1.8";
+    title.textColor = [UIColor yellowColor];
     title.textAlignment = NSTextAlignmentCenter;
-    [menuWindow addSubview:title];
+    title.font = [UIFont boldSystemFontOfSize:16];
+    [self.panel addSubview:title];
     
-    NSArray *names = @[@"ESP", @"Aimlock", @"No Recoil", @"Wallhack"];
-    for (int i = 0; i < 4; i++) {
+    // Các nút chức năng
+    NSArray *titles = @[
+        [NSString stringWithFormat:@"%@ Headshot", headshotEnabled ? @"✅" : @"❌"],
+        [NSString stringWithFormat:@"%@ No Recoil", noRecoilEnabled ? @"✅" : @"❌"],
+        [NSString stringWithFormat:@"%@ No Spread", noSpreadEnabled ? @"✅" : @"❌"],
+        [NSString stringWithFormat:@"%@ Aimbot", aimbotEnabled ? @"✅" : @"❌"],
+        [NSString stringWithFormat:@"%@ Speed Hack", speedHackEnabled ? @"✅" : @"❌"],
+        [NSString stringWithFormat:@"%@ Magic Bullet", magicBulletEnabled ? @"✅" : @"❌"]
+    ];
+    
+    NSArray *selectors = @[@"toggleHeadshot", @"toggleNoRecoil", @"toggleNoSpread", @"toggleAimbot", @"toggleSpeedHack", @"toggleMagicBullet"];
+    
+    for (int i = 0; i < titles.count; i++) {
         UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-        btn.frame = CGRectMake(20 + (i%2)*150, 50 + (i/2)*55, 130, 40);
-        [btn setTitle:[names[i] stringByAppendingString:@" (OFF)"] forState:UIControlStateNormal];
+        btn.frame = CGRectMake(10, 50 + i * 42, 180, 36);
         btn.backgroundColor = [UIColor darkGrayColor];
         btn.layer.cornerRadius = 8;
+        [btn setTitle:titles[i] forState:UIControlStateNormal];
+        [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+        btn.titleLabel.font = [UIFont systemFontOfSize:14];
         btn.tag = i;
-        [btn addTarget:[MenuHandler class] action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
-        [menuWindow addSubview:btn];
+        [btn addTarget:self action:NSSelectorFromString(selectors[i]) forControlEvents:UIControlEventTouchUpInside];
+        [self.panel addSubview:btn];
     }
-    
-    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    closeBtn.frame = CGRectMake(20, 170, 280, 40);
-    [closeBtn setTitle:@"Ẩn Menu" forState:UIControlStateNormal];
-    closeBtn.backgroundColor = [UIColor redColor];
-    closeBtn.tag = 4;
-    [closeBtn addTarget:[MenuHandler class] action:@selector(buttonTapped:) forControlEvents:UIControlEventTouchUpInside];
-    [menuWindow addSubview:closeBtn];
-    
-    menuWindow.hidden = NO;
 }
 
-// ==================== ANTIBAN ====================
-%hook GGAntiCheatManager
-- (BOOL)isGameTampered { return NO; }
-- (BOOL)isMemoryModified { return NO; }
-- (void)reportViolation:(id)violation { }
-%end
+- (void)toggleMenu {
+    self.isOpen = !self.isOpen;
+    self.panel.hidden = !self.isOpen;
+}
 
-%hook GGAntiMod
-- (BOOL)checkInjectedDylibs { return NO; }
-- (BOOL)verifyCodeSignature { return YES; }
-%end
+- (void)updateButton:(int)index title:(NSString *)title {
+    UIButton *btn = self.panel.subviews[index + 1];
+    [btn setTitle:title forState:UIControlStateNormal];
+}
 
-%hook FFMemoryScanner
-- (void)startScan { }
-- (id)getLoadedLibraries {
-    NSArray *libs = %orig;
-    NSMutableArray *filtered = [NSMutableArray array];
-    for(NSString *lib in libs) {
-        if(![lib containsString:@"FFMenu"]) {
-            [filtered addObject:lib];
-        }
-    }
-    return filtered;
+- (void)toggleHeadshot {
+    headshotEnabled = !headshotEnabled;
+    [self updateButton:0 title:[NSString stringWithFormat:@"%@ Headshot", headshotEnabled ? @"✅" : @"❌"]];
+}
+
+- (void)toggleNoRecoil {
+    noRecoilEnabled = !noRecoilEnabled;
+    [self updateButton:1 title:[NSString stringWithFormat:@"%@ No Recoil", noRecoilEnabled ? @"✅" : @"❌"]];
+}
+
+- (void)toggleNoSpread {
+    noSpreadEnabled = !noSpreadEnabled;
+    [self updateButton:2 title:[NSString stringWithFormat:@"%@ No Spread", noSpreadEnabled ? @"✅" : @"❌"]];
+}
+
+- (void)toggleAimbot {
+    aimbotEnabled = !aimbotEnabled;
+    [self updateButton:3 title:[NSString stringWithFormat:@"%@ Aimbot", aimbotEnabled ? @"✅" : @"❌"]];
+}
+
+- (void)toggleSpeedHack {
+    speedHackEnabled = !speedHackEnabled;
+    [self updateButton:4 title:[NSString stringWithFormat:@"%@ Speed Hack", speedHackEnabled ? @"✅" : @"❌"]];
+}
+
+- (void)toggleMagicBullet {
+    magicBulletEnabled = !magicBulletEnabled;
+    [self updateButton:5 title:[NSString stringWithFormat:@"%@ Magic Bullet", magicBulletEnabled ? @"✅" : @"❌"]];
+}
+
+@end
+
+// Hooks
+%hook FIRBulletWeapon
+- (float)getDamageMultiplier {
+    if (headshotEnabled) return 999.0f;
+    return %orig;
+}
+- (BOOL)isHeadshotOnly {
+    return headshotEnabled ? YES : %orig;
 }
 %end
 
-// ==================== CHEAT ====================
-%hook PlayerWeapon
-- (float)recoilMultiplier { return noRecoilEnabled ? 0.0 : %orig; }
+%hook FIRWeapon
+- (float)getRecoilMultiplier {
+    if (noRecoilEnabled) return 0.0f;
+    return %orig;
+}
+- (float)getSpreadMultiplier {
+    if (noSpreadEnabled) return 0.0f;
+    return %orig;
+}
 %end
 
-%hook EnemyPawn
-- (BOOL)isVisibleToPlayer { return espEnabled ? YES : %orig; }
+%hook FIRCharacter
+- (float)getMovementSpeedMultiplier {
+    if (speedHackEnabled) return 2.5f;
+    return %orig;
+}
 %end
 
-%hook WallActor
-- (BOOL)isOccluding { return wallhackEnabled ? NO : %orig; }
+%hook FIRPlayerController
+- (void)aimAtTarget:(id)target {
+    if (aimbotEnabled && target) {
+        // Aimbot logic
+        %orig(target);
+    } else {
+        %orig(target);
+    }
+}
 %end
 
-// ==================== KHỞI TẠO ====================
+%hook FIRBullet
+- (void)updatePosition {
+    if (magicBulletEnabled) {
+        // Magic bullet: bỏ qua vật cản
+        [self setHitPoint:CGPointMake(9999, 9999)];
+    }
+    %orig;
+}
+%end
+
+%hook FIRAntiCheat
+- (BOOL)detectCheat { return NO; }
+- (void)banPlayer { return; }
+- (BOOL)isBanned { return NO; }
+- (void)reportData:(id)data { return; }
+%end
+
+%hook FIRNetworkManager
+- (void)sendPacket:(id)packet {
+    // Chặn gửi report cheat
+    if ([packet isKindOfClass:NSClassFromString(@"FIRReportPacket")]) {
+        return;
+    }
+    %orig;
+}
+%end
+
+// Khởi tạo menu
 %ctor {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        showMenu();
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidFinishLaunchingNotification
+                                                          object:nil
+                                                           queue:nil
+                                                      usingBlock:^(NSNotification *n) {
+            overlayWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            overlayWindow.windowLevel = UIWindowLevelAlert + 1;
+            overlayWindow.backgroundColor = [UIColor clearColor];
+            overlayWindow.userInteractionEnabled = YES;
+            FFMenuView *menu = [[FFMenuView alloc] initWithFrame:overlayWindow.bounds];
+            overlayWindow.rootViewController = [[UIViewController alloc] init];
+            [overlayWindow.rootViewController.view addSubview:menu];
+            overlayWindow.hidden = NO;
+        }];
     });
 }
