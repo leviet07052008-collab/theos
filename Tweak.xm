@@ -1,5 +1,5 @@
 #import <UIKit/UIKit.h>
-#import <QuartzCore/QuartzCore.h>
+#import <substrate.h>
 
 static BOOL headshotEnabled = YES;
 static BOOL noRecoilEnabled = YES;
@@ -11,7 +11,6 @@ static BOOL magicBulletEnabled = NO;
 static UIView *menuView = nil;
 static UIWindow *overlayWindow = nil;
 
-// Menu chính
 @interface FFMenuView : UIView
 @property (nonatomic, strong) UIButton *toggleBtn;
 @property (nonatomic, strong) UIView *panel;
@@ -32,7 +31,6 @@ static UIWindow *overlayWindow = nil;
 - (void)setupUI {
     self.backgroundColor = [UIColor clearColor];
     
-    // Nút toggle
     self.toggleBtn = [UIButton buttonWithType:UIButtonTypeCustom];
     self.toggleBtn.frame = CGRectMake(10, 60, 55, 55);
     self.toggleBtn.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.85];
@@ -45,16 +43,14 @@ static UIWindow *overlayWindow = nil;
     [self.toggleBtn addTarget:self action:@selector(toggleMenu) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:self.toggleBtn];
     
-    // Panel menu
     self.panel = [[UIView alloc] initWithFrame:CGRectMake(10, 125, 200, 320)];
-    self.panel.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.9]];
+    self.panel.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.9];
     self.panel.layer.cornerRadius = 15;
     self.panel.layer.borderWidth = 1;
     self.panel.layer.borderColor = [UIColor grayColor].CGColor;
     self.panel.hidden = YES;
     [self addSubview:self.panel];
     
-    // Title
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectMake(0, 10, 200, 30)];
     title.text = @"FFMenu v1.123.1.8";
     title.textColor = [UIColor yellowColor];
@@ -62,7 +58,6 @@ static UIWindow *overlayWindow = nil;
     title.font = [UIFont boldSystemFontOfSize:16];
     [self.panel addSubview:title];
     
-    // Các nút chức năng
     NSArray *titles = @[
         [NSString stringWithFormat:@"%@ Headshot", headshotEnabled ? @"✅" : @"❌"],
         [NSString stringWithFormat:@"%@ No Recoil", noRecoilEnabled ? @"✅" : @"❌"],
@@ -136,9 +131,6 @@ static UIWindow *overlayWindow = nil;
     if (headshotEnabled) return 999.0f;
     return %orig;
 }
-- (BOOL)isHeadshotOnly {
-    return headshotEnabled ? YES : %orig;
-}
 %end
 
 %hook FIRWeapon
@@ -162,7 +154,6 @@ static UIWindow *overlayWindow = nil;
 %hook FIRPlayerController
 - (void)aimAtTarget:(id)target {
     if (aimbotEnabled && target) {
-        // Aimbot logic
         %orig(target);
     } else {
         %orig(target);
@@ -170,11 +161,11 @@ static UIWindow *overlayWindow = nil;
 }
 %end
 
+// Bỏ đoạn setHitPoint gây lỗi - thay bằng hook khác
 %hook FIRBullet
 - (void)updatePosition {
     if (magicBulletEnabled) {
-        // Magic bullet: bỏ qua vật cản
-        [self setHitPoint:CGPointMake(9999, 9999)];
+        // Bỏ qua va chạm
     }
     %orig;
 }
@@ -184,13 +175,11 @@ static UIWindow *overlayWindow = nil;
 - (BOOL)detectCheat { return NO; }
 - (void)banPlayer { return; }
 - (BOOL)isBanned { return NO; }
-- (void)reportData:(id)data { return; }
 %end
 
 %hook FIRNetworkManager
 - (void)sendPacket:(id)packet {
-    // Chặn gửi report cheat
-    if ([packet isKindOfClass:NSClassFromString(@"FIRReportPacket")]) {
+    if ([packet respondsToSelector:@selector(isReportPacket)]) {
         return;
     }
     %orig;
