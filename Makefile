@@ -13,9 +13,8 @@ include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME=FFMenu
 
-FFMenu_CCFLAGS=-std=c++17 -fno-rtti -DNDEBUG -Wall -fobjc-arc -Wno-deprecated-declarations
-FFMenu_FRAMEWORKS=UIKit Foundation Security QuartzCore CoreGraphics
 FFMenu_FILES=Tweak.xm
 FFMenu_CFLAGS=-fobjc-arc
+FFMenu_FRAMEWORKS=UIKit Foundation
 
 include $(THEOS)/makefiles/tweak.mk
